@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Home, Plus, Grid, User, ScanLine, X, Heart, Share2, Sparkles, Search } from 'lucide-react';
+import { Home, Plus, Grid, User, ScanLine, X, Heart, Share2, Search } from 'lucide-react';
 import { TabView, StarCard, Rarity } from './types';
 import { initializeStorage, getCards, saveCard, deleteCard, toggleFavorite } from './services/storageService';
-import { analyzeCardImage, CardAnalysis } from './services/geminiService';
 import { Card3D } from './components/Card3D';
 import { Button } from './components/Button';
 
@@ -12,11 +11,17 @@ export default function App() {
   const [selectedCard, setSelectedCard] = useState<StarCard | null>(null);
   const [filter, setFilter] = useState<'all' | 'favorites'>('all');
   
-  // Creation Flow
+  // Creation Flow State
   const [isCreating, setIsCreating] = useState(false);
   const [newImage, setNewImage] = useState<string | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysis, setAnalysis] = useState<CardAnalysis | null>(null);
+  
+  // Manual Entry Form State
+  const [draft, setDraft] = useState({
+    name: '',
+    group: '',
+    vibe: '',
+    rarity: Rarity.COMMON
+  });
 
   useEffect(() => {
     initializeStorage();
@@ -38,40 +43,34 @@ export default function App() {
         if (ev.target?.result) {
           const imgUrl = ev.target.result as string;
           setNewImage(imgUrl);
-          analyzeImage(imgUrl);
+          // Reset draft when new image is picked
+          setDraft({
+            name: '',
+            group: '',
+            vibe: '',
+            rarity: Rarity.COMMON
+          });
         }
       };
       reader.readAsDataURL(e.target.files[0]);
     }
   };
 
-  const analyzeImage = async (imgUrl: string) => {
-    setIsAnalyzing(true);
-    try {
-      const result = await analyzeCardImage(imgUrl);
-      setAnalysis(result);
-    } catch (error) {
-      console.error("Analysis failed", error);
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
   const handleSaveCard = () => {
-    if (!newImage || !analysis) return;
+    if (!newImage) return;
 
-    let rarity = Rarity.COMMON;
-    if (analysis.rarityScore > 90) rarity = Rarity.LIMITED;
-    else if (analysis.rarityScore > 80) rarity = Rarity.LEGENDARY;
-    else if (analysis.rarityScore > 60) rarity = Rarity.RARE;
+    // Use default values if empty
+    const finalName = draft.name.trim() || 'Unknown Star';
+    const finalGroup = draft.group.trim() || 'Solo';
+    const finalVibe = draft.vibe.trim() || 'Cool';
 
     const newCard: StarCard = {
       id: Date.now().toString(),
       imageUrl: newImage,
-      name: analysis.name,
-      group: analysis.group,
-      vibe: analysis.vibe,
-      rarity: rarity,
+      name: finalName,
+      group: finalGroup,
+      vibe: finalVibe,
+      rarity: draft.rarity,
       createdAt: Date.now(),
       isFavorite: false,
       texture: 'glossy'
@@ -84,7 +83,7 @@ export default function App() {
 
   const resetCreateFlow = () => {
     setNewImage(null);
-    setAnalysis(null);
+    setDraft({ name: '', group: '', vibe: '', rarity: Rarity.COMMON });
     setIsCreating(false);
     setActiveTab('home');
   };
@@ -109,7 +108,7 @@ export default function App() {
   // --- Views ---
 
   const CreateView = () => (
-    <div className="flex flex-col h-full pt-12 px-6 animate-fade-in">
+    <div className="flex flex-col h-full pt-12 px-6 animate-fade-in overflow-y-auto no-scrollbar pb-32">
       <div className="flex justify-between items-center mb-8">
         <h2 className="text-3xl font-bold text-white">New Drop</h2>
         <button onClick={resetCreateFlow} className="p-2 rounded-full bg-surfaceHighlight text-gray-400 hover:text-white transition-colors">
@@ -118,7 +117,7 @@ export default function App() {
       </div>
 
       {!newImage ? (
-        <div className="flex-1 flex flex-col items-center justify-center">
+        <div className="flex-1 flex flex-col items-center justify-center min-h-[50vh]">
           <div className="w-full aspect-[3/4] max-h-[500px] border-2 border-dashed border-zinc-800 rounded-[32px] flex flex-col items-center justify-center bg-surfaceHighlight/30 relative overflow-hidden group hover:border-zinc-600 transition-colors cursor-pointer">
             <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/10 to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
             <ScanLine className="w-12 h-12 text-zinc-600 mb-4 group-hover:text-white transition-colors" />
@@ -132,59 +131,84 @@ export default function App() {
           </div>
         </div>
       ) : (
-        <div className="flex-1 flex flex-col items-center animate-slide-up">
-          {/* Card Preview Area */}
-          <div className="relative mb-8 w-full flex justify-center">
-            {isAnalyzing ? (
-              <div className="w-[85vw] max-w-sm aspect-[2/3] rounded-[24px] bg-surfaceHighlight flex flex-col items-center justify-center relative overflow-hidden border border-white/5 shadow-2xl">
-                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-[shimmer_1.5s_infinite]" />
-                 <Sparkles className="w-8 h-8 text-indigo-400 animate-spin mb-4" />
-                 <p className="text-sm text-indigo-200 font-medium">Analyzing Aesthetics...</p>
-              </div>
-            ) : (
-              <Card3D 
-                card={{
-                  id: 'preview',
-                  imageUrl: newImage,
-                  name: analysis?.name || 'Unknown',
-                  group: analysis?.group || 'Unknown',
-                  rarity: analysis?.rarityScore ? (
-                    analysis.rarityScore > 90 ? Rarity.LIMITED : 
-                    analysis.rarityScore > 80 ? Rarity.LEGENDARY : 
-                    analysis.rarityScore > 60 ? Rarity.RARE : Rarity.COMMON
-                  ) : Rarity.COMMON,
-                  vibe: analysis?.vibe || 'Analyzing...',
-                  createdAt: Date.now(),
-                  isFavorite: false,
-                  texture: 'glossy'
-                }} 
-                size="full"
-                interactive={true}
-                flippable={true} 
-              />
-            )}
+        <div className="flex-1 flex flex-col items-center animate-slide-up w-full">
+          {/* Card Preview Area - Live Update */}
+          <div className="relative mb-8 w-full flex justify-center py-4">
+            <Card3D 
+              card={{
+                id: 'preview',
+                imageUrl: newImage,
+                name: draft.name || 'Name',
+                group: draft.group || 'Group',
+                rarity: draft.rarity,
+                vibe: draft.vibe || 'Your vibe...',
+                createdAt: Date.now(),
+                isFavorite: false,
+                texture: 'glossy'
+              }} 
+              size="full"
+              interactive={true}
+              flippable={true} 
+            />
           </div>
 
-          {/* Edit / Confirm Area */}
-          {!isAnalyzing && analysis && (
-            <div className="w-full max-w-sm space-y-4 pb-24">
-              <div className="grid grid-cols-2 gap-3">
-                 <input 
-                   value={analysis.group} 
-                   onChange={(e) => setAnalysis({...analysis, group: e.target.value})}
-                   placeholder="Group"
-                   className="w-full bg-surfaceHighlight/50 border border-white/5 rounded-2xl px-4 py-3 text-sm text-white placeholder-zinc-500 focus:bg-surfaceHighlight outline-none transition-colors"
-                 />
-                 <input 
-                   value={analysis.name} 
-                   onChange={(e) => setAnalysis({...analysis, name: e.target.value})}
-                   placeholder="Idol Name"
-                   className="w-full bg-surfaceHighlight/50 border border-white/5 rounded-2xl px-4 py-3 text-sm text-white font-bold placeholder-zinc-500 focus:bg-surfaceHighlight outline-none transition-colors"
-                 />
-              </div>
-              <Button onClick={handleSaveCard} variant="primary">Add to Collection</Button>
+          {/* Manual Entry Form */}
+          <div className="w-full max-w-sm space-y-5 pb-8">
+            
+            {/* Rarity Selector */}
+            <div className="flex gap-2 p-1 bg-surfaceHighlight/50 rounded-xl border border-white/5 overflow-x-auto no-scrollbar">
+              {Object.values(Rarity).map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setDraft({ ...draft, rarity: r })}
+                  className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+                    draft.rarity === r 
+                      ? 'bg-white text-black shadow-md' 
+                      : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  {r}
+                </button>
+              ))}
             </div>
-          )}
+
+            <div className="space-y-3">
+               <div className="grid grid-cols-2 gap-3">
+                 <div className="space-y-1">
+                   <label className="text-xs text-zinc-500 ml-1">Group</label>
+                   <input 
+                     value={draft.group} 
+                     onChange={(e) => setDraft({...draft, group: e.target.value})}
+                     placeholder="e.g. NewJeans"
+                     className="w-full bg-surfaceHighlight/50 border border-white/5 rounded-2xl px-4 py-3 text-sm text-white placeholder-zinc-600 focus:bg-surfaceHighlight focus:border-zinc-500 outline-none transition-all"
+                   />
+                 </div>
+                 <div className="space-y-1">
+                   <label className="text-xs text-zinc-500 ml-1">Name</label>
+                   <input 
+                     value={draft.name} 
+                     onChange={(e) => setDraft({...draft, name: e.target.value})}
+                     placeholder="e.g. Hanni"
+                     className="w-full bg-surfaceHighlight/50 border border-white/5 rounded-2xl px-4 py-3 text-sm text-white font-bold placeholder-zinc-600 focus:bg-surfaceHighlight focus:border-zinc-500 outline-none transition-all"
+                   />
+                 </div>
+               </div>
+               
+               <div className="space-y-1">
+                 <label className="text-xs text-zinc-500 ml-1">Vibe</label>
+                 <input 
+                   value={draft.vibe} 
+                   onChange={(e) => setDraft({...draft, vibe: e.target.value})}
+                   placeholder="e.g. Ethereal, Dreamy, Y2K"
+                   className="w-full bg-surfaceHighlight/50 border border-white/5 rounded-2xl px-4 py-3 text-sm text-white placeholder-zinc-600 focus:bg-surfaceHighlight focus:border-zinc-500 outline-none transition-all"
+                 />
+               </div>
+            </div>
+
+            <div className="pt-4">
+              <Button onClick={handleSaveCard} variant="primary">Mint Card</Button>
+            </div>
+          </div>
         </div>
       )}
     </div>
