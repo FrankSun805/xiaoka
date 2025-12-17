@@ -1,6 +1,12 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Safely retrieve API key or fallback to empty string to prevent "process is not defined" crash in browser
+const apiKey = (typeof process !== 'undefined' && process.env && process.env.API_KEY) 
+  ? process.env.API_KEY 
+  : '';
+
+// Initialize AI only if key exists to allow UI to render even without key (though analysis will fail)
+const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 export interface CardAnalysis {
   name: string;
@@ -10,6 +16,16 @@ export interface CardAnalysis {
 }
 
 export const analyzeCardImage = async (base64Image: string): Promise<CardAnalysis> => {
+  if (!ai) {
+    console.error("API Key missing. Cannot analyze.");
+    return {
+      name: "API Key Missing",
+      group: "System",
+      vibe: "Please configure key",
+      rarityScore: 0
+    };
+  }
+
   // Strip prefix if present (e.g., "data:image/jpeg;base64,")
   const base64Data = base64Image.split(',')[1] || base64Image;
 
