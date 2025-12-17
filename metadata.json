@@ -1,0 +1,7 @@
+{
+  "name": "StarCard - 明星小卡收藏",
+  "description": "A premium, mobile-first application for creating, collecting, and viewing digital idol photocard collections with realistic 3D textures and smooth animations.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
